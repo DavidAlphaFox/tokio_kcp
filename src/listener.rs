@@ -19,7 +19,7 @@ use crate::{config::KcpConfig, session::KcpSessionManager, stream::KcpStream};
 
 #[derive(Debug)]
 pub struct KcpListener {
-    udp: Arc<UdpSocket>,
+    udp: Arc<UdpSocket>, 
     accept_rx: mpsc::Receiver<(KcpStream, SocketAddr)>,
     task_watcher: JoinHandle<()>,
 }
@@ -33,7 +33,7 @@ impl Drop for KcpListener {
 impl KcpListener {
     /// Create an `KcpListener` bound to `addr`
     pub async fn bind<A: ToSocketAddrs>(config: KcpConfig, addr: A) -> KcpResult<KcpListener> {
-        let udp = UdpSocket::bind(addr).await?;
+        let udp = UdpSocket::bind(addr).await?; //创建全新的udp socket
         KcpListener::from_socket(config, udp).await
     }
 
@@ -42,7 +42,7 @@ impl KcpListener {
         let udp = Arc::new(udp);
         let server_udp = udp.clone();
 
-        let (accept_tx, accept_rx) = mpsc::channel(1024 /* backlogs */);
+        let (accept_tx, accept_rx) = mpsc::channel(1024 /* backlogs */); //创建一个channel
         let task_watcher = tokio::spawn(async move {
             let (close_tx, mut close_rx) = mpsc::channel(64);
 
