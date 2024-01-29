@@ -39,20 +39,20 @@ impl KcpListener {
 
     /// Create a `KcpListener` from an existed `UdpSocket`
     pub async fn from_socket(config: KcpConfig, udp: UdpSocket) -> KcpResult<KcpListener> {
-        let udp = Arc::new(udp);
+        let udp = Arc::new(udp); //udp会被共享
         let server_udp = udp.clone();
 
         let (accept_tx, accept_rx) = mpsc::channel(1024 /* backlogs */); //创建一个channel
         let task_watcher = tokio::spawn(async move {
-            let (close_tx, mut close_rx) = mpsc::channel(64);
+            let (close_tx, mut close_rx) = mpsc::channel(64); //创建一个关闭管理channel
 
             let mut sessions = KcpSessionManager::new();
-            let mut packet_buffer = [0u8; 65536];
+            let mut packet_buffer = [0u8; 65536]; //65536字节的缓存
             loop {
                 tokio::select! {
                     peer_addr = close_rx.recv() => {
                         let peer_addr = peer_addr.expect("close_tx closed unexpectly");
-                        sessions.close_peer(peer_addr);
+                        sessions.close_peer(peer_addr); //通知session管理器关闭指定的链接
                         trace!("session peer_addr: {} removed", peer_addr);
                     }
 
@@ -77,19 +77,19 @@ impl KcpListener {
                                 let mut conv = kcp::get_conv(packet);
                                 if conv == 0 {
                                     // Allocate a conv for client.
-                                    conv = sessions.alloc_conv();
+                                    conv = sessions.alloc_conv(); //获取一个id
                                     debug!("allocate {} conv for peer: {}", conv, peer_addr);
 
-                                    kcp::set_conv(packet, conv);
+                                    kcp::set_conv(packet, conv); //更新packet的id
                                 }
 
-                                let sn = kcp::get_sn(packet);
-
+                                let sn = kcp::get_sn(packet); // 获取序列号
+                                //得到一个session，或者重建一个session
                                 let session = match sessions.get_or_create(&config, conv, sn, &udp, peer_addr, &close_tx).await {
                                     Ok((s, created)) => {
                                         if created {
                                             // Created a new session, constructed a new accepted client
-                                            let stream = KcpStream::with_session(s.clone());
+                                            let stream = KcpStream::with_session(s.clone()); //创建steam，并发送给acceptor
                                             if let Err(..) = accept_tx.try_send((stream, peer_addr)) {
                                                 debug!("failed to create accepted stream due to channel failure");
 
