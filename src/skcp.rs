@@ -24,12 +24,12 @@ impl UdpOutput {
     /// Create a new Writer for writing packets to UdpSocket
     pub fn new(socket: Arc<UdpSocket>, target_addr: SocketAddr) -> UdpOutput {
         let (delay_tx, mut delay_rx) = mpsc::unbounded_channel::<Vec<u8>>();
-
+        //创建一个没有大小限制的队列（受限内存）
         {
             let socket = socket.clone();
             tokio::spawn(async move {
-                while let Some(buf) = delay_rx.recv().await {
-                    if let Err(err) = socket.send_to(&buf, target_addr).await {
+                while let Some(buf) = delay_rx.recv().await { //从队列拿到数据
+                    if let Err(err) = socket.send_to(&buf, target_addr).await { //立刻发送出去
                         error!("[SEND] UDP delayed send failed, error: {}", err);
                     }
                 }
@@ -46,14 +46,14 @@ impl UdpOutput {
 
 impl Write for UdpOutput {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        match self.socket.try_send_to(buf, self.target_addr) {
+        match self.socket.try_send_to(buf, self.target_addr) { //尝试实用socket直接发送
             Ok(n) => Ok(n),
             Err(ref err) if err.kind() == ErrorKind::WouldBlock => {
                 // send return EAGAIN
                 // ignored as packet was lost in transmission
                 trace!("[SEND] UDP send EAGAIN, packet.size: {} bytes, delayed send", buf.len());
 
-                self.delay_tx.send(buf.to_owned()).expect("channel closed unexpectly");
+                self.delay_tx.send(buf.to_owned()).expect("channel closed unexpectly"); //通过队列发送数据
 
                 Ok(buf.len())
             }
@@ -155,7 +155,7 @@ impl KcpSocket {
                 self.kcp.rmt_wnd(),
                 self.kcp.waiting_conv()
             );
-
+            //如果有等待发送的数据，那么唤醒
             if let Some(waker) = self.pending_sender.replace(cx.waker().clone()) {
                 if !cx.waker().will_wake(&waker) {
                     waker.wake();
