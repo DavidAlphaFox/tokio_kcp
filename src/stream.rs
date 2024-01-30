@@ -90,9 +90,9 @@ impl KcpStream {
     pub fn poll_recv(&mut self, cx: &mut Context<'_>, buf: &mut [u8]) -> Poll<KcpResult<usize>> {
         loop {
             // Consumes all data in buffer
-            if self.recv_buffer_pos < self.recv_buffer_cap {
+            if self.recv_buffer_pos < self.recv_buffer_cap { 
                 let remaining = self.recv_buffer_cap - self.recv_buffer_pos;
-                let copy_length = remaining.min(buf.len());
+                let copy_length = remaining.min(buf.len()); //对buf大小进行比对，取小的那个
 
                 buf[..copy_length]
                     .copy_from_slice(&self.recv_buffer[self.recv_buffer_pos..self.recv_buffer_pos + copy_length]);
@@ -101,7 +101,7 @@ impl KcpStream {
             }
 
             // Mutex doesn't have poll_lock, spinning on it.
-            let mut kcp = self.session.kcp_socket().lock();
+            let mut kcp = self.session.kcp_socket().lock(); //锁定socket
 
             // Try to read from KCP
             // 1. Read directly with user provided `buf`
@@ -109,7 +109,7 @@ impl KcpStream {
 
             // 1.1. User's provided buffer is larger than available buffer's size
             if peek_size > 0 && peek_size <= buf.len() {
-                match ready!(kcp.poll_recv(cx, buf)) {
+                match ready!(kcp.poll_recv(cx, buf)) { //直接从kcp上获取数据
                     Ok(n) => {
                         trace!("[CLIENT] recv directly {} bytes", n);
                         return Ok(n).into();
