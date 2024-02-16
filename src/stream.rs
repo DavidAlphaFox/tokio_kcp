@@ -58,8 +58,8 @@ impl KcpStream {
         let conv = rand::random();
         let socket = KcpSocket::new(config, conv, udp, addr, config.stream)?;
 
-        let session = KcpSession::new_shared(socket, config.session_expire, None);
-
+        let session = KcpSession::new_shared(socket, config.session_expire, None); 
+        //每个session都会创建两个任务，一个是用来接收UDP数据，一个是用来进行超时管理
         Ok(KcpStream::with_session(session))
     }
 
@@ -69,7 +69,7 @@ impl KcpStream {
             recv_buffer: Vec::new(),
             recv_buffer_pos: 0,
             recv_buffer_cap: 0,
-        }
+        } //Stream都包含一个session和一个recv的buffer
     }
 
     /// `send` data in `buf`

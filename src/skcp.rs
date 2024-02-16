@@ -26,7 +26,7 @@ impl UdpOutput {
         let (delay_tx, mut delay_rx) = mpsc::unbounded_channel::<Vec<u8>>();
         //创建一个没有大小限制的队列（受限内存）
         {
-            let socket = socket.clone();
+            let socket = socket.clone(); //复制socket
             tokio::spawn(async move {
                 while let Some(buf) = delay_rx.recv().await { //从队列拿到数据
                     if let Err(err) = socket.send_to(&buf, target_addr).await { //立刻发送出去
@@ -46,7 +46,7 @@ impl UdpOutput {
 
 impl Write for UdpOutput {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        match self.socket.try_send_to(buf, self.target_addr) { //尝试实用socket直接发送
+        match self.socket.try_send_to(buf, self.target_addr) { //尝试socket直接发送
             Ok(n) => Ok(n),
             Err(ref err) if err.kind() == ErrorKind::WouldBlock => {
                 // send return EAGAIN
@@ -88,6 +88,7 @@ impl KcpSocket {
         stream: bool,
     ) -> KcpResult<KcpSocket> {
         let output = UdpOutput::new(socket.clone(), target_addr);
+        //创建到udp输出封装，里面存在异步任务，用来发送数据
         let mut kcp = if stream {
             Kcp::new_stream(conv, output)
         } else {
@@ -104,7 +105,7 @@ impl KcpSocket {
 
         Ok(KcpSocket {
             kcp,
-            last_update: Instant::now(),
+            last_update: Instant::now(), 
             socket,
             flush_write: c.flush_write,
             flush_ack_input: c.flush_acks_input,
@@ -138,7 +139,7 @@ impl KcpSocket {
     pub fn poll_send(&mut self, cx: &mut Context<'_>, mut buf: &[u8]) -> Poll<KcpResult<usize>> {
         if self.closed {
             return Err(io::Error::from(ErrorKind::BrokenPipe).into()).into();
-        }
+        } //先确定自己不是关闭的
 
         // If:
         //     1. Have sent the first packet (asking for conv)
@@ -147,7 +148,7 @@ impl KcpSocket {
             && (self.kcp.wait_snd() >= self.kcp.snd_wnd() as usize
                 || self.kcp.wait_snd() >= self.kcp.rmt_wnd() as usize
                 || self.kcp.waiting_conv())
-        {
+        { //我们发送了第一个packet，或者我们有很多数据没有发送
             trace!(
                 "[SEND] waitsnd={} sndwnd={} rmtwnd={} excceeded or waiting conv={}",
                 self.kcp.wait_snd(),
@@ -157,15 +158,15 @@ impl KcpSocket {
             );
             //如果有等待发送的数据，那么唤醒
             if let Some(waker) = self.pending_sender.replace(cx.waker().clone()) {
-                if !cx.waker().will_wake(&waker) {
-                    waker.wake();
+                if !cx.waker().will_wake(&waker) { //如果cx.waker()和之前的waker不同
+                    waker.wake(); //唤醒之前的waker
                 }
             }
-            return Poll::Pending;
+            return Poll::Pending; //返回Pending状态
         }
-
+        //此时并没发送第一个封包
         if !self.sent_first && self.kcp.waiting_conv() && buf.len() > self.kcp.mss() as usize {
-            buf = &buf[..self.kcp.mss() as usize];
+            buf = &buf[..self.kcp.mss() as usize]; //重新分割buf，让buf的数据符合mss
         }
 
         let n = self.kcp.send(buf)?;
@@ -175,7 +176,7 @@ impl KcpSocket {
             self.kcp.flush()?;
         }
 
-        self.last_update = Instant::now();
+        self.last_update = Instant::now(); //更新最后发送时间
 
         if self.flush_write {
             self.kcp.flush()?;
@@ -203,7 +204,7 @@ impl KcpSocket {
             return Ok(0).into();
         }
 
-        match self.kcp.recv(buf) {
+        match self.kcp.recv(buf) { //使用KCP协议对收的数据进行解析
             e @ (Ok(0) | Err(KcpError::RecvQueueEmpty) | Err(KcpError::ExpectingFragment)) => {
                 trace!(
                     "[RECV] rcvwnd={} peeksize={} r={:?}",

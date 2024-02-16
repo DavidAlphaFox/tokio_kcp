@@ -28,7 +28,7 @@ pub struct KcpSession {
     session_expire: Duration,
     session_close_notifier: Option<(mpsc::Sender<SocketAddr>, SocketAddr)>,
     input_tx: mpsc::Sender<Vec<u8>>,
-    notifier: Notify,
+    notifier: Notify, 
 }
 
 impl Drop for KcpSession {
@@ -207,9 +207,9 @@ impl KcpSession {
                         // If window is full, flush it immediately
                         if socket.need_flush() {
                             let _ = socket.flush();
-                        } //刷写数据
-
-                        match socket.update() {
+                        } //如果窗口满了，进行数据刷写
+                        // 计算出下次更新的时间
+                         match socket.update() {
                             Ok(next_next) => Instant::from_std(next_next),
                             Err(err) => {
                                 error!("[SESSION] KCP update failed, error: {}", err);
